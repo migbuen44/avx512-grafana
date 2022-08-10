@@ -1,0 +1,77 @@
+# project namespace = monte-carlo
+# Copyright (C) 2022 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: monte-carlo-avx512
+  labels:
+    name: monte-carlo-avx512
+    app: monte-carlo-avx512
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    feature.node.kubernetes.io/cpu-cpuid.AVX512BW: "true" # requires NFD
+  containers:
+  - name: promgw
+    image: prom/pushgateway
+  - name: montecarlo
+    image: ptorre/montecarlo
+    imagePullPolicy: Always
+    command: ["/app/start"]
+    #command: ["sleep", "infinity"]
+    env:
+    - name: METRIC_NAME
+      value: "avx512"
+    - name: USE_TASKSET
+      value: "0"
+    - name: PAUSE_TIME # seconds
+      value: "10"
+    - name: PR # processes
+      value: "2"
+    - name: USE_AVX512
+      value: "1"
+    - name: PUSHGWIP
+      value: "monte-carlo-avx512.monte-carlo.svc.cluster.local"
+    resources:
+      requests:
+        memory: "500Mi"
+        cpu: "2"
+      limits:
+        memory: "500Mi"
+        cpu: "2"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: monte-carlo-avx512
+  name: monte-carlo-avx512
+  namespace: monte-carlo
+spec:
+  ports:
+  - port: 9091
+    protocol: TCP
+    targetPort: 9091
+    name: web
+  selector:
+    app: monte-carlo-avx512
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    k8s-app: monte-carlo-avx512
+  name: monte-carlo-avx512
+  namespace: monte-carlo
+spec:
+  endpoints:
+  - interval: 30s
+    port: web
+    scheme: http
+    path: /metrics
+  selector:
+    matchLabels:
+      app: monte-carlo-avx512
