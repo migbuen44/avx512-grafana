@@ -16,10 +16,21 @@ oc apply -f 02-avx2.yaml
 
 # Deploy Grafana Operator and Instance
 oc apply -f grafana-operator.yaml
+until oc get deployment grafana-operator-controller-manager 2>/dev/null; do
+    echo "Waiting for Grafana operator deployment to be created"
+    sleep 1
+done
+oc wait deployment grafana-operator-controller-manager --for condition=Available
+
 oc apply -f grafana-instance.yaml
+until oc get deployment grafana-deployment 2>/dev/null; do
+    echo "Waiting for Grafana instance deployment to be created"
+    sleep 1
+done
+oc wait deployment grafana-deployment --for condition=Available
 
 # Sleep whilst Grafana comes up
-sleep 60
+sleep 30
 
 # Add service account to pull Prometheus data and add datasource
 oc adm policy add-cluster-role-to-user cluster-monitoring-view -z grafana-serviceaccount
