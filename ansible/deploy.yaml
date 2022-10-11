@@ -1,0 +1,195 @@
+---
+# vim: set ft=ansible:
+
+# Step 0: Setup VirtualEnv
+
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Copy over avx512 venv requirements.txt
+      ansible.builtin.copy:
+        src: reqs/requirements.txt
+        dest: /tmp/avx512-requirements.txt
+
+    - name: "Create AVX512-venv"
+      pip:
+        requirements: "/tmp/avx512-requirements.txt"
+        virtualenv: "/tmp/virtualenvs/avx512-venv"
+        virtualenv_site_packages: true
+        virtualenv_command: "/usr/bin/python3 -m venv"
+
+    - name: "Set Ansible interpreter to venv"
+      set_fact:
+        ansible_python_interpreter: /tmp/virtualenvs/avx512-venv/bin/python
+
+# Step 1: Deploy AVX Workloads
+
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Create Monte Carlo project
+      k8s:
+        state: present
+        definition: "{{ lookup('file', 'reqs/montecarlo-project.yaml') }}"
+      register: project_success
+      retries: 3
+      delay: 30
+      until: project_success is not failed
+
+    - name: Enable User Workload Monitoring
+      k8s:
+        state: present
+        definition: "{{ lookup('file', '../user-workloads.yaml') }}"
+      register: user_workloads_success
+      retries: 3
+      delay: 30
+      until: user_workloads_success is not failed
+
+    - name: Deploy AVX512 Workload
+      k8s:
+        state: present
+        namespace: monte-carlo
+        definition: "{{ lookup('file', '../01-avx512.yaml') }}"
+      register: avx512_success
+      retries: 3
+      delay: 30
+      until: avx512_success is not failed
+
+    - name: Deploy AVX2 Workload
+      k8s:
+        state: present
+        namespace: monte-carlo
+        definition: "{{ lookup('file', '../02-avx2.yaml') }}"
+      register: avx2_success
+      retries: 3
+      delay: 30
+      until: avx2_success is not failed
+
+# Step 2: Deploy Grafana Configuration
+
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Deploy Grafana Operator
+      k8s:
+        state: present
+        namespace: monte-carlo
+        definition: "{{ lookup('file', '../grafana-operator.yaml') }}"
+        wait: yes
+      register: grafanaop_success
+      retries: 3
+      delay: 30
+      until: grafanaop_success is not failed
+
+    - name: Wait for Grafana Operator Controller Manager
+      k8s_info:
+        name: grafana-operator-controller-manager
+        kind: Deployment
+        namespace: monte-carlo
+        wait: yes
+        wait_timeout: 60
+        wait_sleep: 20
+      register: deployment_status
+      until: (deployment_status.resources[0].status.readyReplicas == 1)
+      retries: 10
+      delay: 10
+
+    - name: Deploy Grafana Instance
+      k8s:
+        state: present
+        namespace: monte-carlo
+        definition: "{{ lookup('file', '../grafana-instance.yaml') }}"
+        wait: yes
+      register: grafanainst_success
+      retries: 3
+      delay: 30
+      until: grafanainst_success is not failed
+
+    - name: Wait for Grafana Deployment
+      k8s_info:
+        name: grafana-deployment
+        kind: Deployment
+        namespace: monte-carlo
+        wait: yes
+        wait_timeout: 60
+        wait_sleep: 20
+      register: deployment_status_inst
+      until: (deployment_status_inst.resources[0].status.readyReplicas == 1)
+      retries: 10
+      delay: 10
+
+    - name: Ensure Grafana Service Account exists with cluster-monitoring-view
+      block:
+      - name: Create Grafana Service Account
+        shell: >-
+          oc adm policy add-cluster-role-to-user cluster-monitoring-view -z grafana-serviceaccount
+        register: user_success
+        retries: 3
+        delay: 30
+        until: user_success is not failed
+
+      - name: Get ServiceAccount for Grafana Datasource
+        k8s_info:
+          kind: ServiceAccount
+          name: grafana-serviceaccount
+          namespace: monte-carlo
+        register: grafana_serviceaccount
+
+      - name: Grab ServiceAccount token list
+        set_fact:
+          token_list: "{{ grafana_serviceaccount.resources[0] | json_query('secrets[*].name')}}"
+
+      - name: Grab ServiceAccount token name
+        set_fact:
+          bearer_token_secret_name: "{{ item }}"
+        loop: "{{ token_list }}"
+        when: '"token" in item'
+
+      - name: Grab ServiceAccount token secret
+        k8s_info:
+          kind: Secret
+          name: "{{ bearer_token_secret_name }}"
+          namespace: monte-carlo
+        register: bearer_token_secret
+
+      - name: Grab Bearer token for secret
+        set_fact:
+          bearer_token: "{{ bearer_token_secret.resources[0].data.token | b64decode}}"
+
+      - name: Apply Grafana Datasource with Jinja template
+        k8s:
+          definition: "{{ lookup('template', 'reqs/grafana-datasource.j2') }}"
+          state: present
+          namespace: monte-carlo
+          wait: yes
+        register: datasource_success
+        retries: 3
+        delay: 30
+        until: datasource_success is not failed
+
+      - name: Deploy Custom Grafana Dashboard
+        k8s:
+          state: present
+          definition: "{{ lookup('file', '../grafana-dashboard.yaml') }}"
+        register: dashboard_success
+        retries: 3
+        delay: 30
+        until: dashboard_success is not failed
+
+# Step 3: Get OpenShift Route for Grafana
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Grab OpenShift Route
+      k8s_info:
+        name: grafana-route
+        kind: Route
+        namespace: monte-carlo
+        wait: yes
+        wait_timeout: 60
+        wait_sleep: 20
+      register: grafana_route
+
+    - name: Print Grafana Route
+      debug:
+        msg: "Grafana exposed at: https://{{ grafana_route.resources[0].spec.host }}/d/qCiDx4mVl/intel-avx512-red-hat-openshift?orgId=1"

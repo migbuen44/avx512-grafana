@@ -1,0 +1,101 @@
+---
+# vim: set ft=ansible:
+
+# Step 0: Setup VirtualEnv
+
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Copy over avx512 venv requirements.txt
+      ansible.builtin.copy:
+        src: reqs/requirements.txt
+        dest: /tmp/avx512-requirements.txt
+
+    - name: "Create avx512-venv"
+      pip:
+        requirements: "/tmp/avx512-requirements.txt"
+        virtualenv: "/tmp/virtualenvs/avx512-venv"
+        virtualenv_site_packages: true
+        virtualenv_command: "/usr/bin/python3 -m venv"
+
+    - name: "Set Ansible interpreter to venv"
+      set_fact:
+        ansible_python_interpreter: /tmp/virtualenvs/avx512-venv/bin/python
+
+# Step 1: Destroy Workloads and Operators
+
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Remove AVX Workloads
+      k8s:
+        name: "{{ item }}"
+        state: absent
+        namespace: monte-carlo
+        kind: Pod
+        wait: yes
+      with_items:
+        - "monte-carlo-avx2"
+        - "monte-carlo-avx512"
+
+    - name: Remove Grafana Datasource
+      k8s:
+        api: "integreatly.org/v1alpha1"
+        name: "prometheus-grafanadatasource"
+        state: absent
+        namespace: monte-carlo
+        kind: GrafanaDataSource
+        wait: yes
+
+    - name: Remove Grafana Dashboard
+      k8s:
+        api: "integreatly.org/v1alpha1"
+        name: "avx512-dashboard"
+        state: absent
+        namespace: monte-carlo
+        kind: GrafanaDashboard
+        wait: yes
+
+    - name: Remove Grafana Instance
+      k8s:
+        api: "integreatly.org/v1alpha1"
+        name: "grafana"
+        state: absent
+        namespace: monte-carlo
+        kind: Grafana
+        wait: yes
+
+    - name: Remove Grafana Deployment
+      k8s:
+        name: "grafana-deployment"
+        state: absent
+        namespace: monte-carlo
+        kind: Deployment
+        wait: yes
+
+    - name: Remove Grafana Operator
+      k8s:
+        api: "operators.coreos.com/v1alpha1"
+        name: "grafana-operator"
+        state: absent
+        namespace: monte-carlo
+        kind: Subscription
+        wait: yes
+
+    - name: Remove Grafana Operator Controller Manager
+      k8s:
+        name: "grafana-operator-controller-manager"
+        state: absent
+        namespace: monte-carlo
+        kind: Deployment
+        wait: yes
+
+    - name: Remove Grafana CSV
+      k8s:
+        api: "operators.coreos.com/v1alpha1"
+        name: "grafana-operator.v4.7.0"
+        state: absent
+        namespace: monte-carlo
+        kind: ClusterServiceVersion
+        wait: yes
+
