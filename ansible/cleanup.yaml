@@ -26,6 +26,8 @@
 
 - hosts: localhost
   gather_facts: false
+  vars:
+    kubeconfig: "{{ lookup('env', 'KUBECONFIG') }}"
   tasks:
     - name: Remove AVX Workloads
       k8s:

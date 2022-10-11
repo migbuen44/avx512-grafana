@@ -5,6 +5,8 @@
 
 - hosts: localhost
   gather_facts: false
+  vars:
+    kubeconfig: "{{ lookup('env', 'KUBECONFIG') }}"
   tasks:
     - name: Copy over avx512 venv requirements.txt
       ansible.builtin.copy:
@@ -26,6 +28,8 @@
 
 - hosts: localhost
   gather_facts: false
+  vars:
+    kubeconfig: "{{ lookup('env', 'KUBECONFIG') }}"
   tasks:
     - name: Create Monte Carlo project
       k8s:
@@ -69,6 +73,8 @@
 
 - hosts: localhost
   gather_facts: false
+  vars:
+    kubeconfig: "{{ lookup('env', 'KUBECONFIG') }}"
   tasks:
     - name: Deploy Grafana Operator
       k8s:
@@ -179,6 +185,8 @@
 # Step 3: Get OpenShift Route for Grafana
 - hosts: localhost
   gather_facts: false
+  vars:
+    kubeconfig: "{{ lookup('env', 'KUBECONFIG') }}"
   tasks:
     - name: Grab OpenShift Route
       k8s_info:
