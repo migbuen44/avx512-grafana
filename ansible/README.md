@@ -1,4 +1,4 @@
-# Demonstrating AVX512 vs AVX2 on Red Hat OpenShift
+# Demonstrating AVX512 vs AVX2 on Red Hat OpenShift w/Ansible
 
 **Authors**: [Rhys Oxenham](mailto:roxenham@redhat.com)
 
@@ -6,7 +6,7 @@ This repository aims to demonstrate AVX512 vs AVX2 performance in the [Monte Car
 
 > *NOTE*: You will need to ensure that you have nodes that support AVX512/AVX2 in your OpenShift cluster, or the workloads will fail to schedule!
 
-The deployment script does the following-
+The deployment playbook does the following-
 
 * Create a new dedicated OpenShift project "monte-carlo"
 * Enable [user-workload monitoring](https://docs.openshift.com/container-platform/4.11/monitoring/enabling-monitoring-for-user-defined-projects.html) in built-in OpenShift monitoring
@@ -29,13 +29,13 @@ spec:
 
 ### Deployment
 
-To deploy the environment, simply run the following, assuming you have already configured your OpenShift client and have *system:admin* access:
+To deploy the environment, simply run the following, assuming you have already exported `KUBECONFIG` as an environment variable and have *system:admin* access:
 
 ~~~bash
 # oc whoami
 system:admin
 
-# ./deploy.sh
+# ansible-playbook deploy.yaml
 (...)
 ~~~
 
@@ -44,6 +44,39 @@ system:admin
 To clean up all of the resources, simply run the following-
 
 ~~~bash
-# ./cleanup.sh
+# ansible-playbook cleanup.yaml
 (...)
 ~~~
+
+### Ansible Automation Platform
+
+To integrate with AAP, you need to enable the `kubeconfig` credential type in AAP, by defining a new type with the configurations found in the "aap" directory.
+
+First, the input configuration:
+
+~~~yaml
+fields:
+  - id: kube_config
+    type: string
+    label: kubeconfig
+    secret: true
+    multiline: true
+required:
+  - kube_config
+~~~
+
+Then, the injector format:
+
+~~~yaml
+env:
+  KUBECONFIG: '{{ tower.filename.kubeconfig }}'
+  K8S_AUTH_KUBECONFIG: '{{ tower.filename.kubeconfig }}'
+file:
+  template.kubeconfig: '{{ kube_config }}'
+~~~
+
+Once you have this, you can create new credentials and upload your kubeconfig.
+
+Now you can create a new template for both `deploy` and `cleanup`, referencing this Git repo as the source, and use the "Default Execution Environment".
+
+When you run the deploy playbook, your environment will be deployed in the `monte-carlo` namespace on the cluster your kubeconfig enables access to.

@@ -1,0 +1,5 @@
+env:
+  KUBECONFIG: '{{ tower.filename.kubeconfig }}'
+  K8S_AUTH_KUBECONFIG: '{{ tower.filename.kubeconfig }}'
+file:
+  template.kubeconfig: '{{ kube_config }}'
