@@ -103,3 +103,11 @@
         namespace: monte-carlo
         kind: ClusterServiceVersion
         wait: yes
+
+    - name: Remove Grafana ServiceAccount token
+      k8s:
+        name: "grafana-serviceaccount-token"
+        state: absent
+        namespace: monte-carlo
+        kind: Secret
+        wait: yes
