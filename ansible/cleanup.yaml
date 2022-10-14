@@ -48,6 +48,7 @@
         namespace: monte-carlo
         kind: GrafanaDataSource
         wait: yes
+      ignore_errors: yes
 
     - name: Remove Grafana Dashboard
       k8s:
@@ -57,6 +58,7 @@
         namespace: monte-carlo
         kind: GrafanaDashboard
         wait: yes
+      ignore_errors: yes
 
     - name: Remove Grafana Instance
       k8s:
@@ -66,6 +68,7 @@
         namespace: monte-carlo
         kind: Grafana
         wait: yes
+      ignore_errors: yes
 
     - name: Remove Grafana Deployment
       k8s:
@@ -100,4 +103,3 @@
         namespace: monte-carlo
         kind: ClusterServiceVersion
         wait: yes
-
