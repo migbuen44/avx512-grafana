@@ -110,6 +110,25 @@
   vars:
     kubeconfig: "{{ lookup('env', 'KUBECONFIG') }}"
   tasks:
+    - name: Get Operator Group list
+      k8s_info:
+        kind: OperatorGroup
+        namespace: monte-carlo
+        wait: no
+      register: operatorgroup_list
+
+    - name: Deploy Grafana Operator Group
+      k8s:
+        state: present
+        namespace: monte-carlo
+        definition: "{{ lookup('file', '../grafana-operator-group.yaml') }}"
+        wait: yes
+      register: grafanainst_success
+      retries: 3
+      delay: 30
+      until: grafanainst_success is not failed
+      when: (operatorgroup_list.resources | length) == 0
+
     - name: Deploy Grafana Operator
       k8s:
         state: present
