@@ -190,7 +190,7 @@
           state: present
           namespace: monte-carlo
           definition: "{{ lookup('file', '../service-account-token.yaml') }}"
-        wait: yes
+          wait: yes
         register: sa_success
         retries: 3
         delay: 30
