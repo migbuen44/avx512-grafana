@@ -13,7 +13,7 @@
         src: reqs/requirements.txt
         dest: /tmp/avx512-requirements.txt
 
-    - name: "Create AVX512-venv"
+    - name: "Create avx512-venv"
       pip:
         requirements: "/tmp/avx512-requirements.txt"
         virtualenv: "/tmp/virtualenvs/avx512-venv"
@@ -48,6 +48,40 @@
       retries: 3
       delay: 30
       until: user_workloads_success is not failed
+
+    - name: Deploy Node Feature Discovery Operator
+      k8s:
+        state: present
+        definition: "{{ lookup('file', '../nfd-operator.yaml') }}"
+        wait: yes
+      register: nfdop_success
+      retries: 3
+      delay: 30
+      until: nfdop_success is not failed
+
+    - name: Wait for NFD Controller Manager
+      k8s_info:
+        name: nfd-controller-manager
+        kind: Deployment
+        namespace: openshift-nfd
+        wait: yes
+        wait_timeout: 60
+        wait_sleep: 20
+      register: nfd_deployment_status
+      until: (nfd_deployment_status.resources[0].status.readyReplicas == 1)
+      retries: 10
+      delay: 10
+
+    - name: Deploy NFD Instance
+      k8s:
+        state: present
+        namespace: openshift-nfd
+        definition: "{{ lookup('file', '../nfd-instance.yaml') }}"
+        wait: yes
+      register: nfdinst_success
+      retries: 3
+      delay: 30
+      until: nfdinst_success is not failed
 
     - name: Deploy AVX512 Workload
       k8s:
@@ -151,6 +185,22 @@
         loop: "{{ token_list }}"
         when: '"token" in item'
 
+      - name: Create new secret for 4.11+
+        k8s:
+          state: present
+          namespace: monte-carlo
+          definition: "{{ lookup('file', '../service-account-token.yaml') }}"
+        wait: yes
+        register: sa_success
+        retries: 3
+        delay: 30
+        until: sa_success is not failed
+        when: bearer_token_secret_name is not defined
+
+      - name: Set this secret as ServiceAccount token
+        set_fact:
+          bearer_token_secret_name: "grafana-serviceaccount-token"
+        when: bearer_token_secret_name is not defined
       - name: Grab ServiceAccount token secret
         k8s_info:
           kind: Secret
