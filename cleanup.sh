@@ -15,4 +15,4 @@ oc delete -f grafana-datasource.yaml
 oc delete -f grafana-dashboard.yaml
 oc delete -f grafana-instance.yaml
 oc delete -f grafana-operator.yaml
-oc delete csv/grafana-operator.v4.7.0
+oc delete csv/grafana-operator.v4.7.1

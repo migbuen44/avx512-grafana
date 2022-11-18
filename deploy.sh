@@ -35,6 +35,11 @@ sleep 30
 # Add service account to pull Prometheus data and add datasource
 oc adm policy add-cluster-role-to-user cluster-monitoring-view -z grafana-serviceaccount
 export BEARER_TOKEN=$(oc serviceaccounts get-token grafana-serviceaccount -n monte-carlo)
+if [ -z $BEARER_TOKEN ]; then
+	echo "4.11+ Cluster Detected, creating service account token manually. Ignore above error."
+	oc apply -f service-account-token.yaml
+	export BEARER_TOKEN=$(oc get secret/grafana-serviceaccount-token -o jsonpath='{.data.token}' | base64 -d)
+fi
 envsubst < grafana-datasource.yaml | oc apply -f -
 
 # Deploy Grafana dashboard
